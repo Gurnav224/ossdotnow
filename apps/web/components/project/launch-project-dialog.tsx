@@ -18,25 +18,49 @@ import {
   FormLabel,
   FormMessage,
 } from '@workspace/ui/components/form';
-import { Rocket, Loader2, RefreshCw, ExternalLink, AlertCircle } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Textarea } from '@workspace/ui/components/textarea';
+import { AlertCircle, CalendarIcon, ExternalLink, Loader2, RefreshCw, Rocket } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@workspace/ui/components/popover';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { Calendar } from '@workspace/ui/components/calendar';
+import { Switch } from '@workspace/ui/components/switch';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
+import { MarkdownTextarea } from './markdown-textarea';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { cn } from '@workspace/ui/lib/utils';
+import { useState, useEffect } from 'react';
 import { useTRPC } from '@/hooks/use-trpc';
 import { useForm } from 'react-hook-form';
-import { useState } from 'react';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { z } from 'zod/v4';
 
-const launchSchema = z.object({
-  tagline: z
-    .string()
-    .min(10, 'Tagline must be at least 10 characters')
-    .max(100, 'Tagline must be less than 100 characters'),
-  detailedDescription: z.string().optional(),
-});
+const launchSchema = z
+  .object({
+    tagline: z
+      .string()
+      .min(10, 'Tagline must be at least 10 characters')
+      .max(100, 'Tagline must be less than 100 characters'),
+    detailedDescription: z
+      .string()
+      .min(25, 'Description must be at least 25 characters')
+      .max(1000, 'Description must be less than 1000 characters'),
+    scheduleEnabled: z.boolean(),
+    launchDate: z.date().optional(),
+    launchTime: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.scheduleEnabled && !data.launchDate) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Launch date is required when scheduling is enabled',
+      path: ['launchDate'],
+    },
+  );
 
 type LaunchFormData = z.infer<typeof launchSchema>;
 
@@ -57,14 +81,59 @@ export function LaunchProjectDialog({
 }: LaunchProjectDialogProps) {
   const [open, setOpen] = useState(false);
   const [privateRepoDialogOpen, setPrivateRepoDialogOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(
+    new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }),
+  );
+
+  const [currentDate, setCurrentDate] = useState(
+    new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }),
+  );
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const { data: existingLaunch } = useQuery({
+    ...trpc.launches.getLaunchByProjectId.queryOptions({ projectId }),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(
+        now.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }),
+      );
+      const newDate = now.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      if (newDate !== currentDate) {
+        setCurrentDate(newDate);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentDate]);
 
   const form = useForm<LaunchFormData>({
     resolver: zodResolver(launchSchema),
     defaultValues: {
       tagline: '',
       detailedDescription: '',
+      launchDate: undefined,
+      launchTime: currentTime,
+      scheduleEnabled: false,
     },
   });
 
@@ -104,24 +173,70 @@ export function LaunchProjectDialog({
   const launchMutation = useMutation(
     trpc.launches.launchProject.mutationOptions({
       onSuccess: () => {
-        toast.success('Project launched successfully!');
+        const isScheduled = form.getValues('scheduleEnabled');
+        if (isScheduled) {
+          toast.success(
+            'Project launch scheduled successfully! It will automatically go live at the scheduled time.',
+          );
+        } else {
+          toast.success('Project launched successfully!');
+        }
         setOpen(false);
         form.reset();
         queryClient.invalidateQueries({
           queryKey: trpc.launches.getTodayLaunches.queryKey({ limit: 50 }),
         });
+        queryClient.invalidateQueries({
+          queryKey: trpc.launches.getAllLaunches.queryKey({ limit: 50 }),
+        });
+        queryClient.invalidateQueries({
+          queryKey: trpc.launches.getLaunchByProjectId.queryKey({ projectId }),
+        });
+        queryClient.invalidateQueries({
+          queryKey: trpc.launches.getUserScheduledLaunches.queryKey(),
+        });
       },
-      onError: (error: any) => {
+      onError: (error) => {
         toast.error(error.message || 'Failed to launch project');
       },
     }),
   );
 
   const onSubmit = (data: LaunchFormData) => {
-    launchMutation.mutate({
+    let finalLaunchDate: Date;
+    let finalLaunchTime: string | undefined;
+
+    if (data.scheduleEnabled && data.launchDate) {
+      finalLaunchDate = new Date(data.launchDate);
+      finalLaunchTime = data.launchTime;
+
+      if (finalLaunchTime) {
+        const timeParts = finalLaunchTime.split(':');
+        const hours = parseInt(timeParts[0] || '0', 10);
+        const minutes = parseInt(timeParts[1] || '0', 10);
+        const testDate = new Date(finalLaunchDate);
+        testDate.setHours(hours, minutes, 0, 0);
+
+        if (testDate.getTime() <= Date.now()) {
+          toast.error('Scheduled launch time must be in the future');
+          return;
+        }
+      }
+    } else {
+      finalLaunchDate = new Date();
+      finalLaunchTime = undefined;
+    }
+
+    const submitData = {
       projectId,
-      ...data,
-    });
+      tagline: data.tagline,
+      detailedDescription: data.detailedDescription,
+      launchDate: finalLaunchDate,
+      launchTime: finalLaunchTime,
+      isScheduled: data.scheduleEnabled,
+    };
+
+    launchMutation.mutate(submitData);
   };
 
   const getRepoSettingsUrl = () => {
@@ -151,8 +266,9 @@ export function LaunchProjectDialog({
           return `https://gitlab.com/${owner}/${repo}/-/settings/general`;
         }
       }
-    } catch (e) {
-      console.error('Failed to parse repository URL:', e);
+    } catch (error) {
+      console.error(error);
+      // Failed to parse repository URL
 
       // Fallback: try to extract owner/repo from the URL string
       const match = gitRepoUrl.match(
@@ -251,6 +367,20 @@ export function LaunchProjectDialog({
     </Dialog>
   );
 
+  if (existingLaunch && !isRepoPrivate) {
+    return (
+      <Button
+        className="gap-2 rounded-none border-neutral-700 bg-neutral-800 text-cyan-500 hover:text-cyan-400"
+        size="sm"
+        variant="outline"
+        onClick={() => window.open(`/launches/${projectId}`, '_blank')}
+      >
+        <Rocket className="h-4 w-4" />
+        View Launch
+      </Button>
+    );
+  }
+
   return (
     <>
       {isRepoPrivate ? (
@@ -274,7 +404,7 @@ export function LaunchProjectDialog({
               Launch Project
             </Button>
           </DialogTrigger>
-          <DialogContent className="rounded-none sm:max-w-[600px]">
+          <DialogContent className="max-h-[80vh] overflow-y-auto rounded-none sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Launch {projectName}</DialogTitle>
               <DialogDescription>
@@ -310,12 +440,13 @@ export function LaunchProjectDialog({
                   name="detailedDescription"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Detailed Description (Optional)</FormLabel>
+                      <FormLabel>Detailed Description</FormLabel>
                       <FormControl>
-                        <Textarea
+                        <MarkdownTextarea
                           placeholder="Tell us more about your project, what problem it solves, key features, etc."
                           className="min-h-[120px] rounded-none"
                           {...field}
+                          required
                         />
                       </FormControl>
                       <FormDescription>
@@ -325,6 +456,131 @@ export function LaunchProjectDialog({
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="scheduleEnabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Schedule Launch</FormLabel>
+                        <FormDescription>
+                          Choose a specific date and time for your launch, or launch immediately
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            if (checked) {
+                              if (!form.getValues('launchDate')) {
+                                form.setValue('launchDate', new Date());
+                              }
+                              if (!form.getValues('launchTime')) {
+                                const futureTime = new Date();
+                                futureTime.setMinutes(futureTime.getMinutes() + 5);
+                                const timeString = futureTime.toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: false,
+                                });
+                                form.setValue('launchTime', timeString);
+                              }
+                            }
+                          }}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch('scheduleEnabled') && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="launchDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Launch Date</FormLabel>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant={'outline'}
+                                  className={cn(
+                                    'bg-input/30 rounded-none pl-3 text-left font-normal',
+                                    'hover:bg-input/30',
+                                    !field.value && 'text-muted-foreground',
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(field.value, 'PPP')
+                                  ) : (
+                                    <span>Pick a date</span>
+                                  )}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto rounded-none p-0" align="start">
+                              <Calendar
+                                buttonVariant="outline"
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                defaultMonth={new Date(currentDate)}
+                                disabled={(date) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const maxDate = new Date();
+                                  maxDate.setDate(maxDate.getDate() + 40);
+                                  return date < today || date > maxDate;
+                                }}
+                                captionLayout="dropdown"
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="launchTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Launch Time</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="time"
+                              id="time-picker"
+                              value={field.value || ''}
+                              min={
+                                form.watch('launchDate')?.toDateString() ===
+                                new Date().toDateString()
+                                  ? (() => {
+                                      const now = new Date();
+                                      now.setMinutes(now.getMinutes() + 5);
+                                      return now.toLocaleTimeString('en-US', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: false,
+                                      });
+                                    })()
+                                  : undefined
+                              }
+                              onChange={(e) => field.onChange(e.target.value)}
+                              className="bg-background appearance-none rounded-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
 
                 <DialogFooter>
                   <Button
@@ -343,12 +599,12 @@ export function LaunchProjectDialog({
                     {launchMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin rounded-none" />
-                        Launching...
+                        {form.watch('scheduleEnabled') ? 'Scheduling...' : 'Launching...'}
                       </>
                     ) : (
                       <>
                         <Rocket className="mr-2 h-4 w-4 rounded-none" />
-                        Launch Project
+                        {form.watch('scheduleEnabled') ? 'Schedule Launch' : 'Launch Now'}
                       </>
                     )}
                   </Button>

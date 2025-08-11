@@ -1,6 +1,5 @@
-# oss.now
-
 <div align="center">
+  <h1>oss.now</h1>
   <h3>A platform for open source project discovery, collaboration, and growth</h3>
   <p>Connecting project owners with contributors</p>
 
@@ -13,7 +12,21 @@
 
 ---
 
-## 🚀 About
+<br/>
+<div align="center" style="display:flex; align-items:center; justify-content:center;gap:14px;">
+<a href="https://vercel.com/oss">
+  <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge.svg" />
+</a>
+
+<img alt="Catalyst Project" style="height:44px;" src="./resources/catalyst-logo.png" />
+
+</div>
+<br/>
+<br/>
+
+---
+
+## About
 
 oss.now is a modern platform designed to bridge the gap between open source project maintainers and contributors. Whether you're looking to showcase your project, find contributors with specific skills, or discover exciting projects to contribute to, oss.now provides the tools and community to make it happen.
 
@@ -24,20 +37,21 @@ oss.now is a modern platform designed to bridge the gap between open source proj
 - **Project Launches** - Announce major releases and updates to the community
 - **Early Submissions** - Submit your project early for increased visibility
 - **Contributor Matching** - Find contributors with the skills your project needs
-- **Analytics Dashboard** - Track your project's growth and engagement
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js 15 (App Router) + React 19 + TypeScript
+- **Frontend**: Next.js 15 (App Router) + React 19 + TypeScript + Turbopack
 - **Styling**: Tailwind CSS + shadcn/ui components
+- **Linting & Formatting**: Prettier + ESLint
 - **Backend**: tRPC + Node.js
 - **Database**: PostgreSQL (via Neon) + DrizzleORM
 - **Caching**: Redis (Upstash)
 - **Authentication**: Better-Auth with GitHub & GitLab OAuth
-- **Analytics**: Databuddy
+- **Analytics**: [Databuddy](https://databuddy.cc/) - [repo](https://github.com/databuddy-analytics/databuddy)
 - **Deployment**: Vercel
+- **Monorepo**: Turborepo
 
-## 📁 Project Structure
+## Project Structure
 
 This is a monorepo managed with Turbo:
 
@@ -54,7 +68,7 @@ ossdotnow/
 └── turbo.json        # Turbo configuration
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -107,7 +121,7 @@ ossdotnow/
 
    The application will be available at `http://localhost:3000`
 
-## 📝 Available Scripts
+## Available Scripts
 
 ### Development
 
@@ -133,7 +147,7 @@ ossdotnow/
 - `bun format` - Format code with Prettier
 - `bun typecheck` - Run TypeScript type checking
 
-## 🔐 Setting up OAuth Providers
+## Setting up OAuth Providers
 
 ### GitHub OAuth
 
@@ -180,7 +194,7 @@ We love contributions! Please read our [Contributing Guide](CONTRIBUTING.md) to 
 - Make sure no other Next.js apps are running locally as it may interfere with OAuth flows
 - The application is currently in development mode on production to prevent public access
 
-## 🚀 Deployment
+## Deployment
 
 The application is designed to be deployed on Vercel:
 
@@ -195,7 +209,7 @@ For production deployments, ensure you:
 - Use production database and Redis instances
 - Set `VERCEL_ENV=production`
 
-## 📚 Architecture
+## Architecture
 
 ### Frontend
 
@@ -220,17 +234,15 @@ For production deployments, ensure you:
 - Project launches and comments
 - Voting and reporting systems
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
 1. **OAuth redirect issues**
-
    - Ensure no other Next.js apps are running on port 3000
    - Check that callback URLs match exactly
 
 2. **Database connection errors**
-
    - Make sure Docker is running
    - Check that PostgreSQL is accessible on port 5432
    - Verify DATABASE_URL is correct
@@ -239,18 +251,17 @@ For production deployments, ensure you:
    - All required variables must be set
    - Run `bun dev` to see validation errors
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [Next.js](https://nextjs.org/)
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
 - Database provided and powered by [Neon](https://neon.tech/)
 - Hosting on [Vercel](https://vercel.com/)
-
----
+- ***
 
 <div align="center">
   Made with ❤️ by the oss.now team

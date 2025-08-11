@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import ResponsiveNumber from '@/components/user/responsive-numbers';
+import { ArrowUp, MessageCircle, Clock } from 'lucide-react';
 import { projectProviderEnum } from '@workspace/db/schema';
 import { Button } from '@workspace/ui/components/button';
-import { ArrowUp, MessageCircle } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { useCountdown } from '@/hooks/use-countdown';
 import { authClient } from '@workspace/auth/client';
 import Icons from '@workspace/ui/components/icons';
 import Link from '@workspace/ui/components/link';
 import { useTRPC } from '@/hooks/use-trpc';
 import { formatDate } from '@/lib/utils';
+import { motion } from 'motion/react';
 import Image from 'next/image';
 import { toast } from 'sonner';
-import { useRouter, usePathname } from 'next/navigation';
 
 const isValidProvider = (
   provider: string | null,
@@ -21,12 +24,14 @@ const getRankBadge = (index: number) => {
   if (index === 0)
     return { text: '1st Place', color: 'from-0% from-yellow-600/30 via-10%  to-transparent' };
   if (index === 1)
-    return { text: '2nd Place', color: 'from-0% from-gray-600/30 via-10%  to-transparent' };
+    return { text: '2nd Place', color: 'from-0% from-neutral-600/30 via-10%  to-transparent' };
   if (index === 2)
     return { text: '3rd Place', color: 'from-0% from-orange-600/30 via-10%  to-transparent' };
   return null;
 };
 
+// TODO: Fix this
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function LaunchCard({ project, index }: { project: any; index?: number }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -45,14 +50,26 @@ export default function LaunchCard({ project, index }: { project: any; index?: n
 
   const rankBadge = getRankBadge(index ?? 0);
 
+  const { timeRemaining, isExpired } = useCountdown(
+    project?.status === 'scheduled' ? project.launchDate : null,
+  );
+
   const voteMutation = useMutation({
     ...trpc.launches.voteProject.mutationOptions(),
     onSuccess: () => {
+      toast.success('Vote recorded!');
+      // Refetch all launch lists so UI updates instantly
       queryClient.invalidateQueries({
         queryKey: trpc.launches.getTodayLaunches.queryKey({ limit: 50 }),
       });
       queryClient.invalidateQueries({
         queryKey: trpc.launches.getYesterdayLaunches.queryKey({ limit: 50 }),
+      });
+      queryClient.invalidateQueries({
+        queryKey: trpc.launches.getAllLaunches.queryKey({ limit: 50 }),
+      });
+      queryClient.invalidateQueries({
+        queryKey: trpc.launches.getLaunchesByDateRange.queryKey(),
       });
     },
     onError: () => {
@@ -69,17 +86,21 @@ export default function LaunchCard({ project, index }: { project: any; index?: n
     voteMutation.mutate({ projectId });
   };
 
-  if (isError) return <div>Error</div>;
+  if (isError || !repo) return null;
 
   return (
-    <div className="group/project relative flex h-full flex-col bg-[#171717] p-1">
+    <motion.div className="group/project relative flex h-full flex-col bg-[#171717] p-1">
       <span className="sr-only">View {project.name}</span>
       {rankBadge && (
-        <div
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.3 }}
           className={`bg-gradient-to-r ${rankBadge.color} mb-1 flex h-8 items-center px-2 py-1 text-xs font-semibold`}
         >
           <span className={`text-xs font-semibold text-white`}>{rankBadge.text}</span>
-        </div>
+        </motion.div>
       )}
       <Link
         href={`/launches/${project.id}`}
@@ -111,9 +132,26 @@ export default function LaunchCard({ project, index }: { project: any; index?: n
             <p className="line-clamp-2 text-xs leading-relaxed text-neutral-400 sm:line-clamp-1 md:text-sm">
               {project.description}
             </p>
+
+            {/* Countdown for scheduled launches */}
+            {project.status === 'scheduled' && !isExpired && (
+              <div className="mt-2 flex items-center gap-1 text-xs text-orange-400">
+                <Clock className="h-3 w-3" />
+                <span>Launches in: {timeRemaining}</span>
+              </div>
+            )}
+
             <span className="mt-2 flex w-full flex-row gap-1 overflow-x-auto sm:gap-2">
-              <span className="rounded-none bg-[#171717] px-1.5 py-1 text-xs font-medium text-nowrap text-neutral-300 sm:px-2">
-                {project?.status || 'Unknown Status'}
+              <span
+                className={`rounded-none px-1.5 py-1 text-xs font-medium text-nowrap sm:px-2 ${
+                  project.status === 'scheduled' && !isExpired
+                    ? 'bg-orange-500/20 text-orange-400'
+                    : 'bg-[#171717] text-neutral-300'
+                }`}
+              >
+                {project.status === 'scheduled' && !isExpired
+                  ? 'Scheduled'
+                  : project?.status || 'Unknown Status'}
               </span>
               <span className="rounded-none bg-[#171717] px-1.5 py-1 text-xs font-medium text-nowrap text-neutral-300 sm:px-2">
                 {project?.type || 'Unknown Type'}
@@ -135,32 +173,67 @@ export default function LaunchCard({ project, index }: { project: any; index?: n
         <div className="flex items-center justify-between pt-1">
           <div className="hidden h-full items-center gap-2 pl-2 sm:flex">
             {project.owner?.image ? (
-              <Image
-                src={project.owner?.image}
-                alt={project.owner?.name ?? 'Project Owner'}
-                width={256}
-                height={256}
-                className="size-6 rounded-full"
-              />
+              project.owner.id ? (
+                <Link
+                  href={`/profile/${project.owner.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hidden h-full items-center gap-2 pl-2 transition-opacity hover:opacity-80 sm:flex"
+                >
+                  {project.owner.image ? (
+                    <Image
+                      src={project.owner.image}
+                      alt={project.owner.name ?? 'Project Owner'}
+                      width={256}
+                      height={256}
+                      className="size-6 rounded-full"
+                    />
+                  ) : (
+                    <div className="size-6 shrink-0 rounded-full bg-neutral-700" />
+                  )}
+                  <div className="flex">
+                    <p className="text-xs font-medium text-white">{project.owner.name}</p>
+                    {project.owner.username && (
+                      <p className="text-xs text-neutral-400">/{project.owner.username}</p>
+                    )}
+                  </div>
+                </Link>
+              ) : (
+                <div className="hidden h-full items-center gap-2 pl-2 sm:flex">
+                  {project.owner.image ? (
+                    <Image
+                      src={project.owner.image}
+                      alt={project.owner.name ?? 'Project Owner'}
+                      width={256}
+                      height={256}
+                      className="size-6 rounded-full"
+                    />
+                  ) : (
+                    <div className="size-6 shrink-0 rounded-full bg-neutral-700" />
+                  )}
+                  <div className="flex">
+                    <p className="text-xs font-medium text-white">{project.owner.name}</p>
+                    {project.owner.username && (
+                      <p className="text-xs text-neutral-400">/{project.owner.username}</p>
+                    )}
+                  </div>
+                </div>
+              )
             ) : (
               <div className="size-6 animate-pulse bg-neutral-700" />
             )}
-            <div className="flex">
-              <p className="text-xs font-medium text-white">{project.owner?.name}</p>
-              <p className="text-xs text-neutral-400">/{project.owner?.username}</p>
-            </div>
           </div>
           <div className="flex w-full items-center justify-between gap-2 text-xs sm:w-auto sm:justify-end sm:gap-4 md:text-sm">
             <div className="flex flex-row items-center gap-2 sm:gap-4">
               <div className="flex items-center gap-1">
                 <Icons.star className="h-3 w-3 text-yellow-600 md:h-3.5 md:w-3.5" />
-                <span className="text-neutral-300">
-                  {repo?.stargazers_count || repo?.star_count || 0}
-                </span>
+                <ResponsiveNumber
+                  value={repo?.stargazers_count || repo?.star_count || 0}
+                  className="text-neutral-300"
+                />
               </div>
               <div className="flex items-center gap-1">
                 <Icons.fork className="h-3 w-3 text-purple-600 md:h-3.5 md:w-3.5" />
-                <span className="text-neutral-300">{repo?.forks_count || 0}</span>
+                <ResponsiveNumber value={repo?.forks_count || 0} className="text-neutral-300" />
               </div>
               <div className="flex items-center gap-1">
                 <Icons.clock className="h-3 w-3 text-neutral-500 md:h-3.5 md:w-3.5" />
@@ -177,25 +250,35 @@ export default function LaunchCard({ project, index }: { project: any; index?: n
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <Button
-                  variant={project.hasVoted ? 'default' : 'outline'}
-                  size="sm"
-                  className={`flex h-7 cursor-pointer flex-row items-center gap-1 rounded-none border p-1.5 sm:h-8 sm:p-2 ${
-                    project.hasVoted
-                      ? 'border-[#404040] bg-[#262626] text-white hover:border-[#343434] hover:bg-[#343434] hover:text-white'
-                      : 'border-neutral-300 bg-neutral-300 text-black hover:border-neutral-400 hover:bg-neutral-400 hover:text-black'
-                  }`}
-                  onClick={() => handleVote(project.id)}
-                  disabled={voteMutation.isPending}
-                >
-                  <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="text-xs font-semibold tabular-nums">{project.voteCount}</span>
-                </Button>
+                <motion.div whileTap={{ scale: 0.95 }} transition={{ duration: 0.1 }}>
+                  <Button
+                    variant={project.hasVoted ? 'default' : 'outline'}
+                    size="sm"
+                    className={`flex h-7 cursor-pointer flex-row items-center gap-1 rounded-none border p-1.5 sm:h-8 sm:p-2 ${
+                      project.hasVoted
+                        ? 'border-[#404040] bg-[#262626] text-white hover:border-[#343434] hover:bg-[#343434] hover:text-white'
+                        : 'border-neutral-300 bg-neutral-300 text-black hover:border-neutral-400 hover:bg-neutral-400 hover:text-black'
+                    }`}
+                    onClick={() => handleVote(project.id)}
+                    disabled={voteMutation.isPending}
+                  >
+                    <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <motion.span
+                      key={project.voteCount}
+                      initial={{ scale: 1.2, opacity: 0.8 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-xs font-semibold tabular-nums"
+                    >
+                      {project.voteCount}
+                    </motion.span>
+                  </Button>
+                </motion.div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

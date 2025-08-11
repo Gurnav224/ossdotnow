@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@workspace/ui/components/tabs';
 import { ClaimProjectDialog } from '@/components/project/claim-project-dialog';
+import { MarkdownContent } from '@/components/project/markdown-content';
 import { ContributorData, ProjectWithRelations } from '@workspace/api';
 import { Separator } from '@workspace/ui/components/separator';
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -27,7 +28,6 @@ import { projectProviderEnum } from '@workspace/db/schema';
 import LoadingSpinner from '@/components/loading-spinner';
 import ProjectDescription from './project-description';
 import ProjectErrorPage from '../project-error-page';
-import { MarkdownContent } from './markdown-content';
 import { authClient } from '@workspace/auth/client';
 import { useEffect, useState, useRef } from 'react';
 import Link from '@workspace/ui/components/link';
@@ -101,53 +101,53 @@ interface RepoData {
   pullRequestsCount?: number;
 }
 
-interface Project {
-  id: string;
-  ownerId: string | null;
-  logoUrl: string | null;
-  gitRepoUrl: string | null;
-  gitHost: string | null;
-  name: string;
-  description: string | null;
-  socialLinks: {
-    twitter?: string;
-    discord?: string;
-    linkedin?: string;
-    website?: string;
-    [key: string]: string | undefined;
-  } | null;
-  approvalStatus: 'pending' | 'approved' | 'rejected';
-  isPinned: boolean;
-  hasBeenAcquired: boolean;
-  isLookingForContributors: boolean;
-  isLookingForInvestors: boolean;
-  isHiring: boolean;
-  isPublic: boolean;
-  isRepoPrivate: boolean;
-  acquiredBy: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  statusId: string;
-  typeId: string;
-  deletedAt: Date | null;
-  status?: {
-    id: string;
-    name: string;
-    displayName?: string;
-  };
-  type?: {
-    id: string;
-    name: string;
-    displayName?: string;
-  };
-  tagRelations?: Array<{
-    tag?: {
-      id?: string;
-      name: string;
-      displayName?: string;
-    };
-  }>;
-}
+// interface Project {
+//   id: string;
+//   ownerId: string | null;
+//   logoUrl: string | null;
+//   gitRepoUrl: string | null;
+//   gitHost: string | null;
+//   name: string;
+//   description: string | null;
+//   socialLinks: {
+//     twitter?: string;
+//     discord?: string;
+//     linkedin?: string;
+//     website?: string;
+//     [key: string]: string | undefined;
+//   } | null;
+//   approvalStatus: 'pending' | 'approved' | 'rejected';
+//   isPinned: boolean;
+//   hasBeenAcquired: boolean;
+//   isLookingForContributors: boolean;
+//   isLookingForInvestors: boolean;
+//   isHiring: boolean;
+//   isPublic: boolean;
+//   isRepoPrivate: boolean;
+//   acquiredBy: string | null;
+//   createdAt: Date;
+//   updatedAt: Date;
+//   statusId: string;
+//   typeId: string;
+//   deletedAt: Date | null;
+//   status?: {
+//     id: string;
+//     name: string;
+//     displayName?: string;
+//   };
+//   type?: {
+//     id: string;
+//     name: string;
+//     displayName?: string;
+//   };
+//   tagRelations?: Array<{
+//     tag?: {
+//       id?: string;
+//       name: string;
+//       displayName?: string;
+//     };
+//   }>;
+// }
 
 const isValidProvider = (
   provider: string | null | undefined,
@@ -574,7 +574,7 @@ export default function ProjectPage({ id }: { id: string }) {
                   <TabsContent value="pull-requests">
                     {otherQueries[1].isLoading ? (
                       <div className="flex w-full justify-center py-4">
-                        <LoadingSpinner className="h-16 w-16" />
+                        <LoadingSpinner />
                       </div>
                     ) : pullRequests ? (
                       pullRequests.length === 0 ? (
@@ -593,7 +593,7 @@ export default function ProjectPage({ id }: { id: string }) {
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
                                       {pr.draft ? (
-                                        <div className="flex items-center gap-1 text-gray-400">
+                                        <div className="flex items-center gap-1 text-neutral-400">
                                           <GitPullRequest className="h-4 w-4" />
                                           <span className="text-xs font-medium">Draft</span>
                                         </div>
@@ -790,7 +790,7 @@ export default function ProjectPage({ id }: { id: string }) {
                                   ? 'border-yellow-600/40 hover:border-yellow-500/60'
                                   : contributor.pullRequestsCount !== undefined &&
                                       contributor.pullRequestsCount >= 250
-                                    ? 'border-gray-400/35 hover:border-gray-300/55'
+                                    ? 'border-neutral-400/35 hover:border-neutral-300/55'
                                     : contributor.pullRequestsCount !== undefined &&
                                         contributor.pullRequestsCount >= 100
                                       ? 'border-amber-700/35 hover:border-amber-600/55'

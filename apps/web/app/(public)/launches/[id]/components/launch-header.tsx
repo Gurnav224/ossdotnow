@@ -1,11 +1,9 @@
 'use client';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@workspace/ui/components/avatar';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { projectProviderEnum } from '@workspace/db/schema';
 import { Button } from '@workspace/ui/components/button';
 import { authClient } from '@workspace/auth/client';
-import { formatDistanceToNow } from 'date-fns';
 import { Flag, Share2 } from 'lucide-react';
 import { useTRPC } from '@/hooks/use-trpc';
 import { toast } from 'sonner';
@@ -64,7 +62,7 @@ export default function LaunchHeader({ launch, project, projectId }: LaunchHeade
           url,
         });
       } catch (error) {
-        console.error('Error sharing:', error);
+        console.error(error);
       }
     } else {
       await navigator.clipboard.writeText(url);
@@ -108,25 +106,16 @@ export default function LaunchHeader({ launch, project, projectId }: LaunchHeade
           <h1 className="mb-2 text-3xl font-bold">{launch.name}</h1>
           <p className="mb-2 text-lg text-neutral-400">{launch.tagline}</p>
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-6 w-6">
-                <AvatarImage src={launch.owner?.image || ''} />
-                <AvatarFallback>{launch.owner?.name?.[0]}</AvatarFallback>
-              </Avatar>
-              <span className="text-sm text-neutral-400">
-                {launch.owner?.name || 'Unknown'} launched{' '}
-                {launch.launchDate ? formatDistanceToNow(new Date(launch.launchDate)) : 'recently'}{' '}
-                ago
-              </span>
-            </div>
-
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleShare} className="gap-2 rounded-none">
-                <Share2 className="h-4 w-4" />
-                Share
-              </Button>
+              {launch.status === 'live' && (
+                <Button variant="outline" onClick={handleShare} className="gap-2 rounded-none">
+                  <Share2 className="h-4 w-4" />
+                  Share
+                </Button>
+              )}
               <Button
+                title="Report"
                 variant="outline"
                 onClick={handleReport}
                 className="gap-2 rounded-none"
